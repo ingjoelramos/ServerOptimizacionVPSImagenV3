@@ -165,6 +165,10 @@ verify-ultra
 nano install-ultra-v3.sh
 # (Copiar y pegar el script completo v3.0)
 
+#INSTALACION POR CDN GITHUB
+wget https://raw.githubusercontent.com/ingjoelramos/ServerOptimizacionVPSImagenV3/main/install-ultra-v3.sh
+
+
 # 2️⃣ DAR PERMISOS
 chmod +x install-ultra-v3.sh
 
