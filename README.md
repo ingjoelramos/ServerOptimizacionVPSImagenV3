@@ -69,6 +69,10 @@
 nano install-ultra-v3.sh
 # (Copiar y pegar el script completo v3.0)
 
+#ALTERNATIVA CLONARLO EJECUTAR ESTE COMANDO CDN
+wget https://raw.githubusercontent.com/ingjoelramos/ServerOptimizacionVPSImagenV3/main/install-ultra-v3.sh
+
+
 # 2️⃣ DAR PERMISOS
 chmod +x install-ultra-v3.sh
 
