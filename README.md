@@ -83,7 +83,7 @@ sudo bash install-ultra-v3.sh
 ### 🎯 Instalación Alternativa (Una Línea)
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/tu-usuario/tu-repo/main/install-ultra-v3-final.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/ingjoelramos/ServerOptimizacionVPSImagenV3/main/install-ultra-v3.sh | sudo bash
 ```
 
 ## 📊 Capacidad por Tipo de VPS
