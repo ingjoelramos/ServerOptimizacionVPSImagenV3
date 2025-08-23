@@ -1862,7 +1862,7 @@ echo ""
 # Estadísticas de rendimiento
 echo "⚡ RENDIMIENTO:"
 echo "   Procesos activos: \$(ps aux | grep -E '(jpegoptim|optipng|cwebp|avifenc|gifsicle|svgo)' | grep -v grep | wc -l)"
-echo "   Uso de CPU: \$(top -bn1 | grep "Cpu(s)" | awk '{print \$2}' | cut -d'%' -f1)%"
+echo "   Uso de CPU: \$(top -bn1 | grep "Cpu(s)" | awk '{print $2}' | cut -d'%' -f1)%"
 echo "   Uso de RAM: \$(free | grep Mem | awk '{printf \"%.1f%%\", \$3/\$2 * 100.0}')"
 echo ""
 
@@ -2774,6 +2774,560 @@ show_summary_ultra() {
 # FUNCIÓN PRINCIPAL ULTRA
 #################################################################################
 
+
+#################################################################################
+# API WORDPRESS INTEGRATION - FUNCIONES ADICIONALES
+#################################################################################
+
+create_wordpress_api_system() {
+    print_ultra "========================================="
+    print_ultra "CREANDO SISTEMA API PARA WORDPRESS"
+    print_ultra "========================================="
+    
+    # Crear estructura de directorios para la API
+    print_message "Creando estructura de directorios API..."
+    mkdir -p /var/www/image-processor/api/{v1,v2,webhooks,auth,docs}
+    mkdir -p /var/www/image-processor/api/v1/{optimize,status,batch,health}
+    mkdir -p /var/www/image-processor/config/api
+    mkdir -p /var/www/image-processor/logs/api
+    
+    # Crear archivo de configuración de la API (NO TOCA REDIS CONFIG)
+    print_message "Creando configuración de la API..."
+    cat << 'APICONFIG' > /var/www/image-processor/config/api/config.php
+<?php
+return [
+    'api' => [
+        'version' => '1.0',
+        'name' => 'Image Optimization API',
+        'base_url' => '/api/v1',
+        'auth' => [
+            'type' => 'api_key',
+            'header' => 'X-API-Key',
+            'keys_file' => __DIR__ . '/api_keys.json'
+        ],
+        'cors' => [
+            'enabled' => true,
+            'allowed_origins' => ['*'],
+            'allowed_methods' => ['GET', 'POST', 'OPTIONS'],
+            'allowed_headers' => ['Content-Type', 'X-API-Key', 'X-Callback-URL']
+        ],
+        'limits' => [
+            'max_file_size' => 104857600,
+            'timeout' => 300
+        ]
+    ]
+];
+APICONFIG
+
+    # Sistema de autenticación
+    print_message "Creando sistema de autenticación API..."
+    cat << 'APIAUTH' > /var/www/image-processor/api/auth/ApiAuth.php
+<?php
+class ApiAuth {
+    private \$config;
+    private \$apiKeys;
+    
+    public function __construct() {
+        \$this->config = require __DIR__ . '/../../config/api/config.php';
+        \$this->loadApiKeys();
+    }
+    
+    private function loadApiKeys() {
+        \$keysFile = \$this->config['api']['auth']['keys_file'];
+        if (!file_exists(\$keysFile)) {
+            \$this->initializeApiKeys();
+        }
+        \$this->apiKeys = json_decode(file_get_contents(\$keysFile), true);
+    }
+    
+    private function initializeApiKeys() {
+        \$initialKeys = [
+            'keys' => [
+                [
+                    'key' => \$this->generateApiKey(),
+                    'name' => 'master',
+                    'created' => date('Y-m-d H:i:s'),
+                    'active' => true
+                ]
+            ]
+        ];
+        file_put_contents(
+            \$this->config['api']['auth']['keys_file'],
+            json_encode(\$initialKeys, JSON_PRETTY_PRINT)
+        );
+    }
+    
+    public function generateApiKey() {
+        return bin2hex(random_bytes(32));
+    }
+    
+    public function validateApiKey(\$key) {
+        foreach (\$this->apiKeys['keys'] as \$apiKey) {
+            if (\$apiKey['key'] === \$key && \$apiKey['active']) {
+                return \$apiKey;
+            }
+        }
+        return false;
+    }
+    
+    public function authenticate(\$request) {
+        \$header = \$this->config['api']['auth']['header'];
+        \$apiKey = \$_SERVER['HTTP_' . str_replace('-', '_', strtoupper(\$header))] ?? null;
+        
+        if (!\$apiKey) {
+            return ['success' => false, 'error' => 'API key required'];
+        }
+        
+        \$keyData = \$this->validateApiKey(\$apiKey);
+        if (!\$keyData) {
+            return ['success' => false, 'error' => 'Invalid API key'];
+        }
+        
+        return ['success' => true, 'key_data' => \$keyData];
+    }
+    
+    public function createApiKey(\$name = 'wordpress_plugin') {
+        \$newKey = [
+            'key' => \$this->generateApiKey(),
+            'name' => \$name,
+            'created' => date('Y-m-d H:i:s'),
+            'active' => true
+        ];
+        
+        \$this->apiKeys['keys'][] = \$newKey;
+        file_put_contents(
+            \$this->config['api']['auth']['keys_file'],
+            json_encode(\$this->apiKeys, JSON_PRETTY_PRINT)
+        );
+        
+        return \$newKey;
+    }
+}
+APIAUTH
+
+    # Endpoint principal
+    print_message "Creando endpoint principal de la API..."
+    cat << 'APIENDPOINT' > /var/www/image-processor/api/v1/index.php
+<?php
+error_reporting(0);
+ini_set('display_errors', 0);
+
+header('Content-Type: application/json');
+header('X-Powered-By: Image Optimization API v1.0');
+
+require_once __DIR__ . '/../auth/ApiAuth.php';
+\$config = require __DIR__ . '/../../config/api/config.php';
+
+// CORS
+if (\$config['api']['cors']['enabled']) {
+    \$origin = \$_SERVER['HTTP_ORIGIN'] ?? '*';
+    header("Access-Control-Allow-Origin: \$origin");
+    header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
+    header("Access-Control-Allow-Headers: Content-Type, X-API-Key, X-Callback-URL");
+    
+    if (\$_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+        http_response_code(200);
+        exit();
+    }
+}
+
+class ImageOptimizationAPI {
+    private \$auth;
+    private \$config;
+    private \$redis;
+    
+    public function __construct() {
+        \$this->auth = new ApiAuth();
+        \$this->config = require __DIR__ . '/../../config/api/config.php';
+        // Conectar a Redis existente sin modificar config
+        try {
+            \$this->redis = new Redis();
+            \$this->redis->connect('127.0.0.1', 6379);
+        } catch (Exception \$e) {
+            \$this->redis = null;
+        }
+    }
+    
+    public function handleRequest() {
+        \$path = \$_SERVER['PATH_INFO'] ?? '/';
+        \$path = trim(\$path, '/');
+        \$segments = explode('/', \$path);
+        
+        // Rutas públicas
+        \$publicRoutes = ['health'];
+        
+        // Autenticación
+        if (!in_array(\$segments[0] ?? '', \$publicRoutes)) {
+            \$authResult = \$this->auth->authenticate(\$_SERVER);
+            if (!\$authResult['success']) {
+                \$this->sendResponse(['error' => \$authResult['error']], 401);
+                return;
+            }
+        }
+        
+        // Router
+        switch (\$segments[0] ?? '') {
+            case 'health':
+                \$this->handleHealth();
+                break;
+            case 'optimize':
+                \$this->handleOptimize();
+                break;
+            case 'status':
+                if (isset(\$segments[1])) {
+                    \$this->handleJobStatus(\$segments[1]);
+                }
+                break;
+            case 'download':
+                if (isset(\$segments[1])) {
+                    \$this->handleDownload(\$segments[1]);
+                }
+                break;
+            default:
+                \$this->sendResponse([
+                    'api' => 'Image Optimization API',
+                    'version' => '1.0',
+                    'endpoints' => [
+                        '/health' => 'Check API health',
+                        '/optimize' => 'Optimize image',
+                        '/status/{job_id}' => 'Check job status',
+                        '/download/{job_id}' => 'Download optimized'
+                    ]
+                ]);
+        }
+    }
+    
+    private function handleHealth() {
+        \$this->sendResponse([
+            'status' => 'healthy',
+            'timestamp' => time()
+        ]);
+    }
+    
+    private function handleOptimize() {
+        if (\$_SERVER['REQUEST_METHOD'] !== 'POST') {
+            \$this->sendResponse(['error' => 'Method not allowed'], 405);
+            return;
+        }
+        
+        \$input = json_decode(file_get_contents('php://input'), true);
+        
+        if (!isset(\$input['image'])) {
+            \$this->sendResponse(['error' => 'Image required'], 400);
+            return;
+        }
+        
+        \$jobId = uniqid('job_', true);
+        \$tempFile = "/var/www/image-processor/uploads/pending/{\$jobId}_original";
+        
+        // Procesar imagen
+        if (filter_var(\$input['image'], FILTER_VALIDATE_URL)) {
+            \$imageData = file_get_contents(\$input['image']);
+        } else {
+            \$imageData = base64_decode(\$input['image']);
+        }
+        
+        file_put_contents(\$tempFile, \$imageData);
+        
+        // Usar Redis si está disponible
+        if (\$this->redis) {
+            \$jobData = [
+                'id' => \$jobId,
+                'status' => 'queued',
+                'created' => time()
+            ];
+            \$this->redis->setex("imgopt:{\$jobId}", 86400, json_encode(\$jobData));
+            \$this->redis->lpush("imgopt:queue", json_encode([
+                'job_id' => \$jobId,
+                'file' => \$tempFile,
+                'options' => \$input
+            ]));
+        }
+        
+        \$this->sendResponse([
+            'job_id' => \$jobId,
+            'status' => 'queued',
+            'status_url' => "/api/v1/status/{\$jobId}"
+        ], 202);
+    }
+    
+    private function handleJobStatus(\$jobId) {
+        if (!\$this->redis) {
+            \$this->sendResponse(['error' => 'Status not available'], 503);
+            return;
+        }
+        
+        \$jobData = \$this->redis->get("imgopt:{\$jobId}");
+        
+        if (!\$jobData) {
+            \$this->sendResponse(['error' => 'Job not found'], 404);
+            return;
+        }
+        
+        \$this->sendResponse(json_decode(\$jobData, true));
+    }
+    
+    private function handleDownload(\$jobId) {
+        \$file = "/var/www/image-processor/processed/{\$jobId}_optimized";
+        
+        if (!file_exists(\$file)) {
+            \$this->sendResponse(['error' => 'File not found'], 404);
+            return;
+        }
+        
+        header('Content-Type: application/octet-stream');
+        header('Content-Length: ' . filesize(\$file));
+        readfile(\$file);
+        exit;
+    }
+    
+    private function sendResponse(\$data, \$code = 200) {
+        http_response_code(\$code);
+        echo json_encode(\$data);
+        exit;
+    }
+}
+
+try {
+    \$api = new ImageOptimizationAPI();
+    \$api->handleRequest();
+} catch (Exception \$e) {
+    http_response_code(500);
+    echo json_encode(['error' => 'Internal server error']);
+}
+APIENDPOINT
+
+    # Worker de procesamiento
+    print_message "Creando worker de procesamiento API..."
+    cat << 'APIWORKER' > /var/www/image-processor/scripts/api-worker.php
+<?php
+// Worker simple que usa Redis existente
+\$redis = new Redis();
+\$redis->connect('127.0.0.1', 6379);
+
+function logMessage(\$message) {
+    file_put_contents(
+        '/var/www/image-processor/logs/api/worker.log',
+        date('[Y-m-d H:i:s] ') . \$message . "\n",
+        FILE_APPEND
+    );
+}
+
+logMessage("Worker iniciado");
+
+while (true) {
+    \$job = \$redis->brpop('imgopt:queue', 5);
+    
+    if (!\$job) continue;
+    
+    \$jobData = json_decode(\$job[1], true);
+    \$jobId = \$jobData['job_id'];
+    
+    logMessage("Procesando job: \$jobId");
+    
+    // Actualizar estado
+    \$redis->setex("imgopt:{\$jobId}", 86400, json_encode(['status' => 'processing']));
+    
+    // Procesar imagen
+    \$inputFile = \$jobData['file'];
+    \$outputFile = str_replace('/pending/', '/processed/', \$inputFile) . '_optimized.jpg';
+    
+    // Optimizar
+    exec("jpegoptim --strip-all --max=85 -o --stdout \$inputFile > \$outputFile 2>/dev/null");
+    
+    // WebP si se solicita
+    if (!empty(\$jobData['options']['webp'])) {
+        exec("cwebp -q 85 \$inputFile -o \$outputFile.webp 2>/dev/null");
+    }
+    
+    // Actualizar estado
+    \$redis->setex("imgopt:{\$jobId}", 86400, json_encode([
+        'status' => 'completed',
+        'output_file' => \$outputFile
+    ]));
+    
+    // Callback
+    if (!empty(\$jobData['options']['callback_url'])) {
+        \$ch = curl_init(\$jobData['options']['callback_url']);
+        curl_setopt(\$ch, CURLOPT_POST, 1);
+        curl_setopt(\$ch, CURLOPT_POSTFIELDS, json_encode(['job_id' => \$jobId, 'status' => 'completed']));
+        curl_setopt(\$ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+        curl_setopt(\$ch, CURLOPT_TIMEOUT, 30);
+        curl_exec(\$ch);
+        curl_close(\$ch);
+    }
+    
+    logMessage("Job completado: \$jobId");
+    
+    // Limpiar
+    if (file_exists(\$inputFile)) {
+        unlink(\$inputFile);
+    }
+}
+APIWORKER
+
+    # Servicio systemd
+    print_message "Creando servicio systemd para el worker API..."
+    cat << 'APISYSTEMD' > /etc/systemd/system/api-worker.service
+[Unit]
+Description=API Worker for Image Processing
+After=network.target redis-server.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+ExecStart=/usr/bin/php /var/www/image-processor/scripts/api-worker.php
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+APISYSTEMD
+
+    # Herramienta de gestión de API keys
+    print_message "Creando herramienta de gestión de API keys..."
+    cat << 'APIKEYS' > /usr/local/bin/api-key-manager
+#!/usr/bin/php
+<?php
+require_once '/var/www/image-processor/api/auth/ApiAuth.php';
+
+\$auth = new ApiAuth();
+
+if (\$argc < 2) {
+    echo "Uso: api-key-manager <comando>\n";
+    echo "  create <nombre> - Crear API key\n";
+    echo "  list           - Listar keys\n";
+    echo "  show           - Mostrar key maestra\n";
+    exit(1);
+}
+
+switch (\$argv[1]) {
+    case 'create':
+        \$name = \$argv[2] ?? 'wordpress_plugin';
+        \$key = \$auth->createApiKey(\$name);
+        echo "API Key creada:\n";
+        echo "Nombre: {\$key['name']}\n";
+        echo "Key: {\$key['key']}\n";
+        break;
+    
+    case 'list':
+        \$config = require '/var/www/image-processor/config/api/config.php';
+        \$keys = json_decode(file_get_contents(\$config['api']['auth']['keys_file']), true);
+        foreach (\$keys['keys'] as \$key) {
+            echo "Nombre: {\$key['name']} | Estado: " . (\$key['active'] ? 'ACTIVA' : 'INACTIVA') . "\n";
+        }
+        break;
+    
+    case 'show':
+        \$config = require '/var/www/image-processor/config/api/config.php';
+        \$keys = json_decode(file_get_contents(\$config['api']['auth']['keys_file']), true);
+        foreach (\$keys['keys'] as \$key) {
+            if (\$key['name'] === 'master') {
+                echo \$key['key'] . "\n";
+                break;
+            }
+        }
+        break;
+}
+APIKEYS
+    
+    chmod +x /usr/local/bin/api-key-manager
+
+    # Actualizar Nginx para la API
+    print_message "Actualizando configuración de Nginx para la API..."
+    
+    # Agregar antes del último } en el archivo de configuración
+    sed -i '/^}$/i\
+    \
+    # API WordPress Integration\
+    location /api/v1 {\
+        try_files \$uri \$uri/ /api/v1/index.php?\$query_string;\
+        \
+        location ~ \\.php\$ {\
+            include snippets/fastcgi-php.conf;\
+            fastcgi_pass unix:/var/run/php/php8.3-fpm.sock;\
+            fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;\
+            include fastcgi_params;\
+            fastcgi_read_timeout 600;\
+        }\
+    }' /etc/nginx/sites-available/image-optimizer
+
+    # Permisos
+    chown -R www-data:www-data /var/www/image-processor/api
+    chown -R www-data:www-data /var/www/image-processor/config
+    chmod -R 755 /var/www/image-processor/api
+
+    # Arrancar el worker
+    systemctl daemon-reload
+    systemctl enable api-worker
+    systemctl start api-worker
+
+    # Reiniciar Nginx
+    nginx -t && systemctl reload nginx
+
+    # Generar API key inicial
+    print_message "Generando API key maestra..."
+    sleep 2
+    API_KEY=$(sudo -u www-data /usr/local/bin/api-key-manager show 2>/dev/null || sudo -u www-data /usr/local/bin/api-key-manager create master | grep "Key:" | awk '{print $2}')
+    
+    echo ""
+    print_ultra "========================================"
+    print_ultra "API KEY MAESTRA GENERADA"
+    print_ultra "========================================"
+    echo "Key: $API_KEY"
+    print_ultra "========================================"
+    echo "IMPORTANTE: Guarda esta key de forma segura!"
+    echo ""
+
+    print_success "Sistema API para WordPress completamente configurado"
+}
+
+create_api_monitor_command() {
+    print_message "Creando comando de monitoreo para la API..."
+    cat << 'APIMON' > /usr/local/bin/monitor-api
+#!/bin/bash
+
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+echo -e "\${CYAN}========================================="
+echo "MONITOR DE API - WORDPRESS INTEGRATION"
+echo "=========================================\${NC}"
+
+# Estado del worker
+if systemctl is-active --quiet api-worker; then
+    echo -e "\${GREEN}✓\${NC} Worker API: Activo"
+else
+    echo -e "\${RED}✗\${NC} Worker API: Inactivo"
+fi
+
+# Jobs en cola
+if command -v redis-cli >/dev/null 2>&1; then
+    QUEUE=\$(redis-cli llen imgopt:queue 2>/dev/null || echo 0)
+    echo -e "\${CYAN}📊\${NC} Jobs en cola: \$QUEUE"
+    
+    TODAY=\$(redis-cli get imgopt:stats:\$(date +%Y-%m-%d) 2>/dev/null || echo 0)
+    echo -e "\${CYAN}📈\${NC} Procesados hoy: \$TODAY"
+fi
+
+# Health check
+HEALTH=\$(curl -s http://localhost/api/v1/health 2>/dev/null)
+if [ \$? -eq 0 ]; then
+    echo -e "\${GREEN}✓\${NC} API respondiendo correctamente"
+else
+    echo -e "\${RED}✗\${NC} API no responde"
+fi
+
+echo -e "\${CYAN}=========================================\${NC}"
+APIMON
+    
+    chmod +x /usr/local/bin/monitor-api
+    print_success "Monitor de API creado"
+}
+
 main_ultra() {
     # Inicializar log ultra
     echo "=====================================================" > $LOG_FILE
@@ -2810,6 +3364,13 @@ main_ultra() {
     create_benchmark_ultra
     optimize_kernel_extreme
     create_maintenance_system
+
+    # INTEGRACIÓN API WORDPRESS
+    print_ultra "========================================="
+    print_ultra "INSTALANDO API WORDPRESS INTEGRATION"
+    print_ultra "========================================="
+    create_wordpress_api_system
+    create_api_monitor_command
     
     # Validar servicios antes del resumen
     validate_critical_services
@@ -2820,3 +3381,4 @@ main_ultra() {
 
 # Ejecutar función principal ultra
 main_ultra "$@"
+
