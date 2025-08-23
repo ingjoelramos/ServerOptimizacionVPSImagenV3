@@ -2078,21 +2078,45 @@ echo ""
 
 # Verificar SSL y renovación automática
 echo -e "${PURPLE}[SSL Y CERTIFICADOS]${NC}"
+
+# Primero verificar si hay SSL activo en el puerto 443
+SSL_ACTIVE=false
+if netstat -tulpn 2>/dev/null | grep -q ":443 "; then
+    SSL_ACTIVE=true
+    echo -e "${GREEN}✓${NC} Puerto 443 (HTTPS) activo - SSL funcionando"
+fi
+
+# Verificar certificados con certbot
 if command -v certbot >/dev/null 2>&1; then
-    cert_count=$(certbot certificates 2>/dev/null | grep "Certificate Name" | wc -l)
+    # Intentar con sudo si es necesario para ver certificados
+    cert_output=$(sudo certbot certificates 2>/dev/null || certbot certificates 2>/dev/null)
+    cert_count=$(echo "$cert_output" | grep -c "Certificate Name" 2>/dev/null || echo "0")
+    
     if [ $cert_count -gt 0 ]; then
-        echo -e "${GREEN}✓${NC} Certificados SSL: $cert_count configurados"
-        
-        # Verificar renovación automática
-        if crontab -l 2>/dev/null | grep -q "ssl-renew"; then
-            echo -e "${GREEN}✓${NC} Renovación automática: cron configurado"
-        else
-            echo -e "${YELLOW}⚠${NC} Renovación automática: cron no detectado"
-        fi
-        
-        if systemctl is-enabled ssl-renew.timer >/dev/null 2>&1; then
-            echo -e "${GREEN}✓${NC} Renovación automática: systemd timer activo"
-        else
+        echo -e "${GREEN}✓${NC} Certificados Let's Encrypt: $cert_count configurados"
+        # Mostrar dominios con certificados
+        echo "$cert_output" | grep "Domains:" | head -1 | sed 's/^/  /' 2>/dev/null || true
+        # Mostrar fecha de expiración
+        echo "$cert_output" | grep "Expiry Date:" | head -1 | sed 's/^/  /' 2>/dev/null || true
+    elif [ "$SSL_ACTIVE" = true ]; then
+        echo -e "${YELLOW}⚠${NC} SSL activo pero no gestionado por Certbot"
+        echo "  (Puede ser certificado personalizado o de otro proveedor)"
+    else
+        echo -e "${YELLOW}⚠${NC} No se detectaron certificados SSL configurados"
+    fi
+    
+    # Verificar renovación automática
+    if crontab -l 2>/dev/null | grep -q "ssl-renew\|certbot"; then
+        echo -e "${GREEN}✓${NC} Renovación automática: cron configurado"
+    elif [ -f /etc/cron.d/certbot ]; then
+        echo -e "${GREEN}✓${NC} Renovación automática: certbot cron detectado"
+    else
+        echo -e "${YELLOW}⚠${NC} Renovación automática: no detectada"
+    fi
+    
+    if systemctl is-enabled ssl-renew.timer >/dev/null 2>&1; then
+        echo -e "${GREEN}✓${NC} Renovación automática: systemd timer activo"
+    else
             echo -e "${YELLOW}⚠${NC} Renovación automática: systemd timer no activo"
         fi
     else
