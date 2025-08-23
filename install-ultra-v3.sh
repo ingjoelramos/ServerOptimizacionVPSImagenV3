@@ -5,7 +5,7 @@
 # Servidor de Optimización de Imágenes PARALELA MASIVA v3.0
 # Autor: Sistema de Configuración Avanzada Ultra Optimizada
 # Versión: 3.0 - MÁXIMO RENDIMIENTO PARALELO + AUTO-DETECTION
-# Fecha: 2025
+# Fecha: 23 agosto 2025 
 # Descripción: Configuración automática para procesamiento paralelo masivo
 #              con detección de hardware y optimizaciones extremas
 #################################################################################
@@ -3192,9 +3192,9 @@ APISYSTEMD
 <?php
 require_once '/var/www/image-processor/api/auth/ApiAuth.php';
 
-\$auth = new ApiAuth();
+$auth = new ApiAuth();
 
-if (\$argc < 2) {
+if ($argc < 2) {
     echo "Uso: api-key-manager <comando>\n";
     echo "  create <nombre> - Crear API key\n";
     echo "  list           - Listar keys\n";
@@ -3202,29 +3202,29 @@ if (\$argc < 2) {
     exit(1);
 }
 
-switch (\$argv[1]) {
+switch ($argv[1]) {
     case 'create':
-        \$name = \$argv[2] ?? 'wordpress_plugin';
-        \$key = \$auth->createApiKey(\$name);
+        $name = $argv[2] ?? 'wordpress_plugin';
+        $key = $auth->createApiKey($name);
         echo "API Key creada:\n";
-        echo "Nombre: {\$key['name']}\n";
-        echo "Key: {\$key['key']}\n";
+        echo "Nombre: {$key['name']}\n";
+        echo "Key: {$key['key']}\n";
         break;
     
     case 'list':
-        \$config = require '/var/www/image-processor/config/api/config.php';
-        \$keys = json_decode(file_get_contents(\$config['api']['auth']['keys_file']), true);
-        foreach (\$keys['keys'] as \$key) {
-            echo "Nombre: {\$key['name']} | Estado: " . (\$key['active'] ? 'ACTIVA' : 'INACTIVA') . "\n";
+        $config = require '/var/www/image-processor/config/api/config.php';
+        $keys = json_decode(file_get_contents($config['api']['auth']['keys_file']), true);
+        foreach ($keys['keys'] as $key) {
+            echo "Nombre: {$key['name']} | Estado: " . ($key['active'] ? 'ACTIVA' : 'INACTIVA') . "\n";
         }
         break;
     
     case 'show':
-        \$config = require '/var/www/image-processor/config/api/config.php';
-        \$keys = json_decode(file_get_contents(\$config['api']['auth']['keys_file']), true);
-        foreach (\$keys['keys'] as \$key) {
-            if (\$key['name'] === 'master') {
-                echo \$key['key'] . "\n";
+        $config = require '/var/www/image-processor/config/api/config.php';
+        $keys = json_decode(file_get_contents($config['api']['auth']['keys_file']), true);
+        foreach ($keys['keys'] as $key) {
+            if ($key['name'] === 'master') {
+                echo $key['key'] . "\n";
                 break;
             }
         }
@@ -3381,4 +3381,3 @@ main_ultra() {
 
 # Ejecutar función principal ultra
 main_ultra "$@"
-
