@@ -5,7 +5,7 @@
 # Servidor de Optimización de Imágenes PARALELA MASIVA v3.0
 # Autor: Sistema de Configuración Avanzada Ultra Optimizada
 # Versión: 3.0 - MÁXIMO RENDIMIENTO PARALELO + AUTO-DETECTION
-# Fecha: 23 agosto 2025 
+# Fecha: Agosto 23 del 2025
 # Descripción: Configuración automática para procesamiento paralelo masivo
 #              con detección de hardware y optimizaciones extremas
 #################################################################################
@@ -1219,6 +1219,13 @@ EOF
     
     # Habilitar configuraciones
     phpenmod opcache-ultra
+    
+    # Deshabilitar JIT para CLI para evitar conflictos con api-key-manager
+    cat << 'EOF' > /etc/php/8.3/cli/conf.d/99-disable-jit.ini
+; Deshabilitar JIT para CLI - evita conflictos con extensiones
+opcache.jit=0
+opcache.jit_buffer_size=0
+EOF
     
     # Reiniciar PHP-FPM
     systemctl restart php8.3-fpm
@@ -3188,7 +3195,7 @@ APISYSTEMD
     # Herramienta de gestión de API keys
     print_message "Creando herramienta de gestión de API keys..."
     cat << 'APIKEYS' > /usr/local/bin/api-key-manager
-#!/usr/bin/php
+#!/usr/bin/php -d opcache.jit=0
 <?php
 require_once '/var/www/image-processor/api/auth/ApiAuth.php';
 
@@ -3381,3 +3388,4 @@ main_ultra() {
 
 # Ejecutar función principal ultra
 main_ultra "$@"
+
