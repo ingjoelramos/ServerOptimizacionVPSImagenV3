@@ -5,7 +5,7 @@
 # Servidor de Optimización de Imágenes PARALELA MASIVA v3.0
 # Autor: Sistema de Configuración Avanzada Ultra Optimizada
 # Versión: 3.0 - MÁXIMO RENDIMIENTO PARALELO + AUTO-DETECTION
-# Fecha: Agosto 23 del 2025
+# Fecha: 2025
 # Descripción: Configuración automática para procesamiento paralelo masivo
 #              con detección de hardware y optimizaciones extremas
 #################################################################################
@@ -2831,27 +2831,27 @@ APICONFIG
     cat << 'APIAUTH' > /var/www/image-processor/api/auth/ApiAuth.php
 <?php
 class ApiAuth {
-    private \$config;
-    private \$apiKeys;
+    private $config;
+    private $apiKeys;
     
     public function __construct() {
-        \$this->config = require __DIR__ . '/../../config/api/config.php';
-        \$this->loadApiKeys();
+        $this->config = require __DIR__ . '/../../config/api/config.php';
+        $this->loadApiKeys();
     }
     
     private function loadApiKeys() {
-        \$keysFile = \$this->config['api']['auth']['keys_file'];
-        if (!file_exists(\$keysFile)) {
-            \$this->initializeApiKeys();
+        $keysFile = $this->config['api']['auth']['keys_file'];
+        if (!file_exists($keysFile)) {
+            $this->initializeApiKeys();
         }
-        \$this->apiKeys = json_decode(file_get_contents(\$keysFile), true);
+        $this->apiKeys = json_decode(file_get_contents($keysFile), true);
     }
     
     private function initializeApiKeys() {
-        \$initialKeys = [
+        $initialKeys = [
             'keys' => [
                 [
-                    'key' => \$this->generateApiKey(),
+                    'key' => $this->generateApiKey(),
                     'name' => 'master',
                     'created' => date('Y-m-d H:i:s'),
                     'active' => true
@@ -2859,8 +2859,8 @@ class ApiAuth {
             ]
         ];
         file_put_contents(
-            \$this->config['api']['auth']['keys_file'],
-            json_encode(\$initialKeys, JSON_PRETTY_PRINT)
+            $this->config['api']['auth']['keys_file'],
+            json_encode($initialKeys, JSON_PRETTY_PRINT)
         );
     }
     
@@ -2868,46 +2868,46 @@ class ApiAuth {
         return bin2hex(random_bytes(32));
     }
     
-    public function validateApiKey(\$key) {
-        foreach (\$this->apiKeys['keys'] as \$apiKey) {
-            if (\$apiKey['key'] === \$key && \$apiKey['active']) {
-                return \$apiKey;
+    public function validateApiKey($key) {
+        foreach ($this->apiKeys['keys'] as $apiKey) {
+            if ($apiKey['key'] === $key && $apiKey['active']) {
+                return $apiKey;
             }
         }
         return false;
     }
     
-    public function authenticate(\$request) {
-        \$header = \$this->config['api']['auth']['header'];
-        \$apiKey = \$_SERVER['HTTP_' . str_replace('-', '_', strtoupper(\$header))] ?? null;
+    public function authenticate($request) {
+        $header = $this->config['api']['auth']['header'];
+        $apiKey = $_SERVER['HTTP_' . str_replace('-', '_', strtoupper($header))] ?? null;
         
-        if (!\$apiKey) {
+        if (!$apiKey) {
             return ['success' => false, 'error' => 'API key required'];
         }
         
-        \$keyData = \$this->validateApiKey(\$apiKey);
-        if (!\$keyData) {
+        $keyData = $this->validateApiKey($apiKey);
+        if (!$keyData) {
             return ['success' => false, 'error' => 'Invalid API key'];
         }
         
-        return ['success' => true, 'key_data' => \$keyData];
+        return ['success' => true, 'key_data' => $keyData];
     }
     
-    public function createApiKey(\$name = 'wordpress_plugin') {
-        \$newKey = [
-            'key' => \$this->generateApiKey(),
-            'name' => \$name,
+    public function createApiKey($name = 'wordpress_plugin') {
+        $newKey = [
+            'key' => $this->generateApiKey(),
+            'name' => $name,
             'created' => date('Y-m-d H:i:s'),
             'active' => true
         ];
         
-        \$this->apiKeys['keys'][] = \$newKey;
+        $this->apiKeys['keys'][] = $newKey;
         file_put_contents(
-            \$this->config['api']['auth']['keys_file'],
-            json_encode(\$this->apiKeys, JSON_PRETTY_PRINT)
+            $this->config['api']['auth']['keys_file'],
+            json_encode($this->apiKeys, JSON_PRETTY_PRINT)
         );
         
-        return \$newKey;
+        return $newKey;
     }
 }
 APIAUTH
@@ -2923,75 +2923,75 @@ header('Content-Type: application/json');
 header('X-Powered-By: Image Optimization API v1.0');
 
 require_once __DIR__ . '/../auth/ApiAuth.php';
-\$config = require __DIR__ . '/../../config/api/config.php';
+$config = require __DIR__ . '/../../config/api/config.php';
 
 // CORS
-if (\$config['api']['cors']['enabled']) {
-    \$origin = \$_SERVER['HTTP_ORIGIN'] ?? '*';
-    header("Access-Control-Allow-Origin: \$origin");
+if ($config['api']['cors']['enabled']) {
+    $origin = $_SERVER['HTTP_ORIGIN'] ?? '*';
+    header("Access-Control-Allow-Origin: $origin");
     header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
     header("Access-Control-Allow-Headers: Content-Type, X-API-Key, X-Callback-URL");
     
-    if (\$_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
         http_response_code(200);
         exit();
     }
 }
 
 class ImageOptimizationAPI {
-    private \$auth;
-    private \$config;
-    private \$redis;
+    private $auth;
+    private $config;
+    private $redis;
     
     public function __construct() {
-        \$this->auth = new ApiAuth();
-        \$this->config = require __DIR__ . '/../../config/api/config.php';
+        $this->auth = new ApiAuth();
+        $this->config = require __DIR__ . '/../../config/api/config.php';
         // Conectar a Redis existente sin modificar config
         try {
-            \$this->redis = new Redis();
-            \$this->redis->connect('127.0.0.1', 6379);
-        } catch (Exception \$e) {
-            \$this->redis = null;
+            $this->redis = new Redis();
+            $this->redis->connect('127.0.0.1', 6379);
+        } catch (Exception $e) {
+            $this->redis = null;
         }
     }
     
     public function handleRequest() {
-        \$path = \$_SERVER['PATH_INFO'] ?? '/';
-        \$path = trim(\$path, '/');
-        \$segments = explode('/', \$path);
+        $path = $_SERVER['PATH_INFO'] ?? '/';
+        $path = trim($path, '/');
+        $segments = explode('/', $path);
         
         // Rutas públicas
-        \$publicRoutes = ['health'];
+        $publicRoutes = ['health'];
         
         // Autenticación
-        if (!in_array(\$segments[0] ?? '', \$publicRoutes)) {
-            \$authResult = \$this->auth->authenticate(\$_SERVER);
-            if (!\$authResult['success']) {
-                \$this->sendResponse(['error' => \$authResult['error']], 401);
+        if (!in_array($segments[0] ?? '', $publicRoutes)) {
+            $authResult = $this->auth->authenticate($_SERVER);
+            if (!$authResult['success']) {
+                $this->sendResponse(['error' => $authResult['error']], 401);
                 return;
             }
         }
         
         // Router
-        switch (\$segments[0] ?? '') {
+        switch ($segments[0] ?? '') {
             case 'health':
-                \$this->handleHealth();
+                $this->handleHealth();
                 break;
             case 'optimize':
-                \$this->handleOptimize();
+                $this->handleOptimize();
                 break;
             case 'status':
-                if (isset(\$segments[1])) {
-                    \$this->handleJobStatus(\$segments[1]);
+                if (isset($segments[1])) {
+                    $this->handleJobStatus($segments[1]);
                 }
                 break;
             case 'download':
-                if (isset(\$segments[1])) {
-                    \$this->handleDownload(\$segments[1]);
+                if (isset($segments[1])) {
+                    $this->handleDownload($segments[1]);
                 }
                 break;
             default:
-                \$this->sendResponse([
+                $this->sendResponse([
                     'api' => 'Image Optimization API',
                     'version' => '1.0',
                     'endpoints' => [
@@ -3005,100 +3005,100 @@ class ImageOptimizationAPI {
     }
     
     private function handleHealth() {
-        \$this->sendResponse([
+        $this->sendResponse([
             'status' => 'healthy',
             'timestamp' => time()
         ]);
     }
     
     private function handleOptimize() {
-        if (\$_SERVER['REQUEST_METHOD'] !== 'POST') {
-            \$this->sendResponse(['error' => 'Method not allowed'], 405);
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            $this->sendResponse(['error' => 'Method not allowed'], 405);
             return;
         }
         
-        \$input = json_decode(file_get_contents('php://input'), true);
+        $input = json_decode(file_get_contents('php://input'), true);
         
-        if (!isset(\$input['image'])) {
-            \$this->sendResponse(['error' => 'Image required'], 400);
+        if (!isset($input['image'])) {
+            $this->sendResponse(['error' => 'Image required'], 400);
             return;
         }
         
-        \$jobId = uniqid('job_', true);
-        \$tempFile = "/var/www/image-processor/uploads/pending/{\$jobId}_original";
+        $jobId = uniqid('job_', true);
+        $tempFile = "/var/www/image-processor/uploads/pending/{$jobId}_original";
         
         // Procesar imagen
-        if (filter_var(\$input['image'], FILTER_VALIDATE_URL)) {
-            \$imageData = file_get_contents(\$input['image']);
+        if (filter_var($input['image'], FILTER_VALIDATE_URL)) {
+            $imageData = file_get_contents($input['image']);
         } else {
-            \$imageData = base64_decode(\$input['image']);
+            $imageData = base64_decode($input['image']);
         }
         
-        file_put_contents(\$tempFile, \$imageData);
+        file_put_contents($tempFile, $imageData);
         
         // Usar Redis si está disponible
-        if (\$this->redis) {
-            \$jobData = [
-                'id' => \$jobId,
+        if ($this->redis) {
+            $jobData = [
+                'id' => $jobId,
                 'status' => 'queued',
                 'created' => time()
             ];
-            \$this->redis->setex("imgopt:{\$jobId}", 86400, json_encode(\$jobData));
-            \$this->redis->lpush("imgopt:queue", json_encode([
-                'job_id' => \$jobId,
-                'file' => \$tempFile,
-                'options' => \$input
+            $this->redis->setex("imgopt:{$jobId}", 86400, json_encode($jobData));
+            $this->redis->lpush("imgopt:queue", json_encode([
+                'job_id' => $jobId,
+                'file' => $tempFile,
+                'options' => $input
             ]));
         }
         
-        \$this->sendResponse([
-            'job_id' => \$jobId,
+        $this->sendResponse([
+            'job_id' => $jobId,
             'status' => 'queued',
-            'status_url' => "/api/v1/status/{\$jobId}"
+            'status_url' => "/api/v1/status/{$jobId}"
         ], 202);
     }
     
-    private function handleJobStatus(\$jobId) {
-        if (!\$this->redis) {
-            \$this->sendResponse(['error' => 'Status not available'], 503);
+    private function handleJobStatus($jobId) {
+        if (!$this->redis) {
+            $this->sendResponse(['error' => 'Status not available'], 503);
             return;
         }
         
-        \$jobData = \$this->redis->get("imgopt:{\$jobId}");
+        $jobData = $this->redis->get("imgopt:{$jobId}");
         
-        if (!\$jobData) {
-            \$this->sendResponse(['error' => 'Job not found'], 404);
+        if (!$jobData) {
+            $this->sendResponse(['error' => 'Job not found'], 404);
             return;
         }
         
-        \$this->sendResponse(json_decode(\$jobData, true));
+        $this->sendResponse(json_decode($jobData, true));
     }
     
-    private function handleDownload(\$jobId) {
-        \$file = "/var/www/image-processor/processed/{\$jobId}_optimized";
+    private function handleDownload($jobId) {
+        $file = "/var/www/image-processor/processed/{$jobId}_optimized";
         
-        if (!file_exists(\$file)) {
-            \$this->sendResponse(['error' => 'File not found'], 404);
+        if (!file_exists($file)) {
+            $this->sendResponse(['error' => 'File not found'], 404);
             return;
         }
         
         header('Content-Type: application/octet-stream');
-        header('Content-Length: ' . filesize(\$file));
-        readfile(\$file);
+        header('Content-Length: ' . filesize($file));
+        readfile($file);
         exit;
     }
     
-    private function sendResponse(\$data, \$code = 200) {
-        http_response_code(\$code);
-        echo json_encode(\$data);
+    private function sendResponse($data, $code = 200) {
+        http_response_code($code);
+        echo json_encode($data);
         exit;
     }
 }
 
 try {
-    \$api = new ImageOptimizationAPI();
-    \$api->handleRequest();
-} catch (Exception \$e) {
+    $api = new ImageOptimizationAPI();
+    $api->handleRequest();
+} catch (Exception $e) {
     http_response_code(500);
     echo json_encode(['error' => 'Internal server error']);
 }
@@ -3109,13 +3109,13 @@ APIENDPOINT
     cat << 'APIWORKER' > /var/www/image-processor/scripts/api-worker.php
 <?php
 // Worker simple que usa Redis existente
-\$redis = new Redis();
-\$redis->connect('127.0.0.1', 6379);
+$redis = new Redis();
+$redis->connect('127.0.0.1', 6379);
 
-function logMessage(\$message) {
+function logMessage($message) {
     file_put_contents(
         '/var/www/image-processor/logs/api/worker.log',
-        date('[Y-m-d H:i:s] ') . \$message . "\n",
+        date('[Y-m-d H:i:s] ') . $message . "\n",
         FILE_APPEND
     );
 }
@@ -3123,52 +3123,52 @@ function logMessage(\$message) {
 logMessage("Worker iniciado");
 
 while (true) {
-    \$job = \$redis->brpop('imgopt:queue', 5);
+    $job = $redis->brpop('imgopt:queue', 5);
     
-    if (!\$job) continue;
+    if (!$job) continue;
     
-    \$jobData = json_decode(\$job[1], true);
-    \$jobId = \$jobData['job_id'];
+    $jobData = json_decode($job[1], true);
+    $jobId = $jobData['job_id'];
     
-    logMessage("Procesando job: \$jobId");
+    logMessage("Procesando job: $jobId");
     
     // Actualizar estado
-    \$redis->setex("imgopt:{\$jobId}", 86400, json_encode(['status' => 'processing']));
+    $redis->setex("imgopt:{$jobId}", 86400, json_encode(['status' => 'processing']));
     
     // Procesar imagen
-    \$inputFile = \$jobData['file'];
-    \$outputFile = str_replace('/pending/', '/processed/', \$inputFile) . '_optimized.jpg';
+    $inputFile = $jobData['file'];
+    $outputFile = str_replace('/pending/', '/processed/', $inputFile) . '_optimized.jpg';
     
     // Optimizar
-    exec("jpegoptim --strip-all --max=85 -o --stdout \$inputFile > \$outputFile 2>/dev/null");
+    exec("jpegoptim --strip-all --max=85 -o --stdout $inputFile > $outputFile 2>/dev/null");
     
     // WebP si se solicita
-    if (!empty(\$jobData['options']['webp'])) {
-        exec("cwebp -q 85 \$inputFile -o \$outputFile.webp 2>/dev/null");
+    if (!empty($jobData['options']['webp'])) {
+        exec("cwebp -q 85 $inputFile -o $outputFile.webp 2>/dev/null");
     }
     
     // Actualizar estado
-    \$redis->setex("imgopt:{\$jobId}", 86400, json_encode([
+    $redis->setex("imgopt:{$jobId}", 86400, json_encode([
         'status' => 'completed',
-        'output_file' => \$outputFile
+        'output_file' => $outputFile
     ]));
     
     // Callback
-    if (!empty(\$jobData['options']['callback_url'])) {
-        \$ch = curl_init(\$jobData['options']['callback_url']);
-        curl_setopt(\$ch, CURLOPT_POST, 1);
-        curl_setopt(\$ch, CURLOPT_POSTFIELDS, json_encode(['job_id' => \$jobId, 'status' => 'completed']));
-        curl_setopt(\$ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-        curl_setopt(\$ch, CURLOPT_TIMEOUT, 30);
-        curl_exec(\$ch);
-        curl_close(\$ch);
+    if (!empty($jobData['options']['callback_url'])) {
+        $ch = curl_init($jobData['options']['callback_url']);
+        curl_setopt($ch, CURLOPT_POST, 1);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['job_id' => $jobId, 'status' => 'completed']));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        curl_exec($ch);
+        curl_close($ch);
     }
     
-    logMessage("Job completado: \$jobId");
+    logMessage("Job completado: $jobId");
     
     // Limpiar
-    if (file_exists(\$inputFile)) {
-        unlink(\$inputFile);
+    if (file_exists($inputFile)) {
+        unlink($inputFile);
     }
 }
 APIWORKER
