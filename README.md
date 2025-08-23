@@ -64,13 +64,14 @@ Sistema ultra optimizado de procesamiento paralelo masivo de imágenes con API R
 
 ```bash
 # 1️⃣ Descargar el script
-wget https://raw.githubusercontent.com/tu-usuario/tu-repo/main/install-ultra-v3-final.sh
+wget https://raw.githubusercontent.com/ingjoelramos/ServerOptimizacionVPSImagenV3/main/install-ultra-v3.sh
 
 # 2️⃣ Dar permisos de ejecución
-chmod +x install-ultra-v3-final.sh
+chmod +x install-ultra-v3.sh
+
 
 # 3️⃣ Ejecutar la instalación
-sudo bash install-ultra-v3-final.sh
+sudo bash install-ultra-v3.sh
 
 # 4️⃣ Guardar la API Key que se muestra al final
 # ========================================
