@@ -2,9 +2,9 @@
 
 #################################################################################
 # Script Ultra Optimizado VPS Ubuntu 24.04 
-# Servidor de Optimización de Imágenes PARALELA MASIVA v3.0
+# Servidor de Optimización de Imágenes PARALELA MASIVA v4.0
 # Autor: Sistema de Configuración Avanzada Ultra Optimizada
-# Versión: 3.0 - MÁXIMO RENDIMIENTO PARALELO + AUTO-DETECTION
+# Versión: 4.0 - MÁXIMO RENDIMIENTO PARALELO + AUTO-DETECTION + API FIX
 # Fecha: 2025
 # Descripción: Configuración automática para procesamiento paralelo masivo
 #              con detección de hardware y optimizaciones extremas
@@ -21,7 +21,7 @@ WHITE='\033[1;37m'
 NC='\033[0m' # No Color
 
 # Variables globales mejoradas
-SCRIPT_VERSION="3.0"
+SCRIPT_VERSION="4.0"
 LOG_FILE="/var/log/image-server-ultra-setup.log"
 DOMAIN=""
 INSTALL_SSL=false
@@ -2956,9 +2956,13 @@ class ImageOptimizationAPI {
     }
     
     public function handleRequest() {
-        $path = $_SERVER['PATH_INFO'] ?? '/';
-        $path = trim($path, '/');
-        $segments = explode('/', $path);
+        $path = $_SERVER["PATH_INFO"] ?? $_SERVER["REQUEST_URI"] ?? "/";
+        // Eliminar /api/v1 del path si está presente
+        $path = preg_replace("#^/api/v1/?#", "", $path);
+        // Eliminar query string si existe
+        $path = strtok($path, "?");
+        $path = trim($path, "/");
+        $segments = explode("/", $path);
         
         // Rutas públicas
         $publicRoutes = ['health'];
@@ -3007,7 +3011,8 @@ class ImageOptimizationAPI {
     private function handleHealth() {
         $this->sendResponse([
             'status' => 'healthy',
-            'timestamp' => time()
+            'timestamp' => time(),
+            'version' => '1.0'
         ]);
     }
     
@@ -3247,17 +3252,13 @@ APIKEYS
     # Agregar antes del último } en el archivo de configuración
     sed -i '/^}$/i\
     \
-    # API WordPress Integration\
-    location /api/v1 {\
-        try_files \$uri \$uri/ /api/v1/index.php?\$query_string;\
-        \
-        location ~ \\.php\$ {\
-            include snippets/fastcgi-php.conf;\
-            fastcgi_pass unix:/var/run/php/php8.3-fpm.sock;\
-            fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;\
-            include fastcgi_params;\
-            fastcgi_read_timeout 600;\
-        }\
+    # API WordPress Integration v4 - FIXED\
+    location ~ ^/api/v1(/|\$) {\
+        fastcgi_pass unix:/var/run/php/php8.3-fpm.sock;\
+        fastcgi_param SCRIPT_FILENAME \$document_root/api/v1/index.php;\
+        fastcgi_param PATH_INFO \$uri;\
+        include fastcgi_params;\
+        fastcgi_read_timeout 600;\
     }' /etc/nginx/sites-available/image-optimizer
 
     # Permisos
